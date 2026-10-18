@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multi-Database Manager</title>
+<style>
+  :root {
+    --bg: #09090b; --panel: #111113; --panel-2: #18181b; --border: #27272a;
+    --text: #fafafa; --muted: #a1a1aa; --accent: #4f46e5; --accent-2: #4338ca;
+    --danger: #ef4444; --ok: #22c55e; --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 "Inter", "Segoe UI", system-ui, sans-serif; }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  aside { border-right: 1px solid var(--border); padding: 20px 14px; background: var(--panel); }
+  .brand { font-weight: 700; font-size: 16px; margin: 0 6px 4px; }
+  .brand-sub { color: var(--muted); font-size: 12px; margin: 0 6px 20px; }
+  .label { text-transform: uppercase; letter-spacing: .08em; font-size: 11px; color: var(--muted); margin: 0 6px 8px; }
+  .db-btn { display: block; width: 100%; text-align: left; background: none; border: 1px solid transparent;
+            color: var(--text); padding: 10px 12px; border-radius: var(--radius); cursor: pointer; margin-bottom: 6px; }
+  .db-btn:hover { background: var(--panel-2); }
+  .db-btn.active { background: var(--panel-2); border-color: var(--border); }
+  .db-btn .name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .db-btn .desc { color: var(--muted); font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+  .db-btn.active .dot { background: var(--accent); }
+  main { padding: 28px 32px; overflow-x: auto; }
+  h1 { margin: 0; font-size: 22px; }
+  .subtitle { color: var(--muted); margin: 2px 0 20px; }
+  .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .tab { background: none; border: none; color: var(--muted); padding: 8px 14px; cursor: pointer;
+         border-bottom: 2px solid transparent; font-size: 14px; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab .count { background: var(--panel-2); border-radius: 999px; padding: 1px 8px; font-size: 11px; margin-left: 6px; }
+  .toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  input, select { background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+                  border-radius: 8px; padding: 8px 10px; font: inherit; }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .search { flex: 1; min-width: 200px; }
+  .btn { border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+         border-radius: 8px; padding: 8px 14px; cursor: pointer; font: inherit; }
+  .btn:hover { border-color: #3f3f46; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); }
+  .btn.primary:hover { background: var(--accent-2); }
+  .btn.danger { color: var(--danger); }
+  .btn.sm { padding: 4px 10px; font-size: 12px; }
+  .card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; background: var(--panel-2); }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #141417; }
+  tr.flash { animation: flash 1.6s ease-out; }
+  @keyframes flash { from { background: rgba(99,102,241,.35); } to { background: transparent; } }
+  td.actions { text-align: right; }
+  td.actions .btn { margin-left: 6px; }
+  .empty { padding: 30px; text-align: center; color: var(--muted); }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; width: 420px; max-width: 92vw; padding: 22px; }
+  .modal h2 { margin: 0 0 16px; font-size: 17px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .field input { width: 100%; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .toast { position: fixed; bottom: 22px; right: 22px; background: var(--panel-2); border: 1px solid var(--border);
+           border-left: 3px solid var(--ok); padding: 10px 16px; border-radius: 8px; opacity: 0; transform: translateY(10px);
+           transition: all .25s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: none; }
+  .toast.error { border-left-color: var(--danger); }
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 20px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand">Multi-DB Manager</div>
+    <div class="brand-sub">3 SQLite databases</div>
+    <div class="label">Select database</div>
+    <div id="db-list"></div>
+  </aside>
+  <main>
+    <h1 id="db-title"></h1>
+    <div class="subtitle" id="db-desc"></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="toolbar">
+      <input id="search" class="search" placeholder="Search rows..." autocomplete="off">
+      <button class="btn primary" id="add-btn">+ Add row</button>
+      <button class="btn" id="reset-btn" title="Restore this database's dummy data">Reset data</button>
+    </div>
+    <div class="card"><table id="grid"></table></div>
+  </main>
+</div>
+
+<div class="modal-bg" id="modal-bg">
+  <form class="modal" id="row-form">
+    <h2 id="modal-title"></h2>
+    <div id="fields"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn" id="cancel-btn">Cancel</button>
+      <button type="submit" class="btn primary" id="save-btn">Save</button>
+    </div>
+  </form>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const state = { databases: [], db: null, table: null, columns: [], rows: [], editingId: null };
+const $ = id => document.getElementById(id);
+
+async function api(path, options = {}) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || res.statusText);
+  return body;
+}
+
+function toast(message, isError = false) {
+  const t = $("toast");
+  t.textContent = message;
+  t.className = "toast show" + (isError ? " error" : "");
+  clearTimeout(t.timer);
+  t.timer = setTimeout(() => t.className = "toast", 2400);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function loadDatabases() {
+  state.databases = await api("/api/databases");
+  renderSidebar();
+}
+
+function renderSidebar() {
+  $("db-list").innerHTML = state.databases.map(d => `
+    <button class="db-btn ${d.key === state.db ? "active" : ""}" data-db="${d.key}">
+      <div class="name"><span class="dot"></span>${d.label}</div>
+      <div class="desc">${d.description}</div>
+    </button>`).join("");
+  document.querySelectorAll(".db-btn").forEach(b => b.onclick = () => selectDatabase(b.dataset.db));
+}
+
+async function selectDatabase(key) {
+  state.db = key;
+  const db = state.databases.find(d => d.key === key);
+  $("db-title").textContent = db.label + " database";
+  $("db-desc").textContent = db.description + " · data/" + key + ".db";
+  renderSidebar();
+  await selectTable(db.tables[0].name);
+}
+
+function renderTabs() {
+  const db = state.databases.find(d => d.key === state.db);
+  $("tabs").innerHTML = db.tables.map(t => `
+    <button class="tab ${t.name === state.table ? "active" : ""}" data-table="${t.name}">
+      ${t.name}<span class="count">${t.rows}</span>
+    </button>`).join("");
+  document.querySelectorAll(".tab").forEach(b => b.onclick = () => selectTable(b.dataset.table));
+}
+
+async function selectTable(name, flashId = null) {
+  state.table = name;
+  const data = await api(`/api/${state.db}/${name}`);
+  state.columns = data.columns;
+  state.rows = data.rows;
+  renderTabs();
+  renderGrid(flashId);
+}
+
+function renderGrid(flashId = null) {
+  const term = $("search").value.trim().toLowerCase();
+  const rows = state.rows.filter(r => !term || Object.values(r).some(v => String(v ?? "").toLowerCase().includes(term)));
+  const head = `<thead><tr>${state.columns.map(c => `<th>${c.name}</th>`).join("")}<th></th></tr></thead>`;
+  const body = rows.length ? rows.map(r => `
+    <tr class="${r.id === flashId ? "flash" : ""}">
+      ${state.columns.map(c => `<td>${escapeHtml(r[c.name])}</td>`).join("")}
+      <td class="actions">
+        <button class="btn sm" data-edit="${r.id}">Edit</button>
+        <button class="btn sm danger" data-delete="${r.id}">Delete</button>
+      </td>
+    </tr>`).join("") : `<tr><td class="empty" colspan="${state.columns.length + 1}">No rows found</td></tr>`;
+  $("grid").innerHTML = head + `<tbody>${body}</tbody>`;
+  document.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => openForm(Number(b.dataset.edit)));
+  document.querySelectorAll("[data-delete]").forEach(b => b.onclick = () => deleteRow(Number(b.dataset.delete)));
+}
+
+function openForm(id = null) {
+  state.editingId = id;
+  const row = id ? state.rows.find(r => r.id === id) : {};
+  $("modal-title").textContent = id ? `Edit ${state.table} #${id}` : `Add to ${state.table}`;
+  $("fields").innerHTML = state.columns.filter(c => !c.pk).map(c => {
+    const type = c.type === "INTEGER" || c.type === "REAL" ? "number" : "text";
+    const step = c.type === "REAL" ? ' step="any"' : "";
+    return `<div class="field">
+      <label for="f-${c.name}">${c.name}${c.notnull ? " *" : ""}</label>
+      <input id="f-${c.name}" name="${c.name}" type="${type}"${step} ${c.notnull ? "required" : ""} value="${escapeHtml(row[c.name])}">
+    </div>`;
+  }).join("");
+  $("modal-bg").classList.add("open");
+  $("fields").querySelector("input").focus();
+}
+
+function closeForm() { $("modal-bg").classList.remove("open"); }
+
+async function saveRow(e) {
+  e.preventDefault();
+  const payload = Object.fromEntries(new FormData($("row-form")));
+  try {
+    let id = state.editingId;
+    if (id) {
+      await api(`/api/${state.db}/${state.table}/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+      toast(`Updated ${state.table} #${id}`);
+    } else {
+      id = (await api(`/api/${state.db}/${state.table}`, { method: "POST", body: JSON.stringify(payload) })).id;
+      toast(`Added ${state.table} #${id}`);
+    }
+    closeForm();
+    await loadDatabases();
+    await selectTable(state.table, id);
+  } catch (err) { toast(err.message, true); }
+}
+
+async function deleteRow(id) {
+  if (!confirm(`Delete ${state.table} #${id}?`)) return;
+  try {
+    await api(`/api/${state.db}/${state.table}/${id}`, { method: "DELETE" });
+    toast(`Deleted ${state.table} #${id}`);
+    await loadDatabases();
+    await selectTable(state.table);
+  } catch (err) { toast(err.message, true); }
+}
+
+async function resetDatabase() {
+  if (!confirm(`Reset the ${state.db} database to its dummy data?`)) return;
+  await api(`/api/${state.db}/reset`, { method: "POST" });
+  toast(`${state.db} database reset`);
+  await loadDatabases();
+  await selectTable(state.table);
+}
+
+$("search").oninput = () => renderGrid();
+$("add-btn").onclick = () => openForm();
+$("reset-btn").onclick = resetDatabase;
+$("cancel-btn").onclick = closeForm;
+$("row-form").onsubmit = saveRow;
+$("modal-bg").onclick = e => { if (e.target === $("modal-bg")) closeForm(); };
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeForm(); });
+
+loadDatabases().then(() => selectDatabase(state.databases[0].key));
+</script>
+</body>
+</html>
